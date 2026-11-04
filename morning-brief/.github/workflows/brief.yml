@@ -1,0 +1,64 @@
+name: morning-brief
+
+on:
+  schedule:
+    - cron: "0 12 * * *"      # daily brief: 12:00 UTC = 6:00 AM Central (winter), 7:00 AM in summer
+    - cron: "*/30 * * * *"    # urgent alert check every 30 minutes (use "0 * * * *" for hourly)
+  workflow_dispatch:          # "Run workflow" button for manual tests
+    inputs:
+      mode:
+        description: "daily or alerts"
+        default: daily
+
+permissions:
+  contents: write             # lets the alert job save which stories it already sent
+
+concurrency:
+  group: morning-brief
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Pick mode
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ inputs.mode }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 12 * * *" ]; then
+            echo "mode=daily" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=alerts" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install
+        run: |
+          # ffmpeg is only needed for the voice note, so alert runs skip it and finish faster
+          if [ "${{ steps.mode.outputs.mode }}" = "daily" ]; then
+            sudo apt-get install -y -qq ffmpeg > /dev/null
+          fi
+          pip install -q -r requirements.txt
+
+      - name: Run
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python brief.py ${{ steps.mode.outputs.mode }}
+
+      - name: Save alert memory
+        if: steps.mode.outputs.mode == 'alerts'
+        run: |
+          git config user.name "morning-brief-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add state/seen.json
+          git diff --cached --quiet || (git commit -q -m "update alert state [skip ci]" && git push -q)

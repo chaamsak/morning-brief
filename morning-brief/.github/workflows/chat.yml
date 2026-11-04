@@ -1,0 +1,35 @@
+name: chat
+
+# Started by the Cloudflare relay (relay/worker.js) each time you message the bot.
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: "Telegram message text"
+        required: true
+
+concurrency:
+  group: chat
+  cancel-in-progress: false
+
+jobs:
+  reply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -q -r requirements.txt
+
+      - name: Answer
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MESSAGE: ${{ inputs.message }}   # passed via env, never pasted into the shell command
+        run: python bot.py --once "$MESSAGE"
