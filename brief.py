@@ -149,10 +149,86 @@ def ask_claude(system: str, prompt: str, max_tokens: int = 4000) -> str:
 
 
 def parse_json(text: str):
-    match = re.search(r"\{.*\}|\[.*\]", text, re.S)
-    if not match:
-        raise ValueError(f"No JSON in model output: {text[:200]}")
-    return json.loads(match.group(0))
+    decoder = json.JSONDecoder()
+    last_error = None
+    for match in re.finditer(r"[\[{]", text):
+        try:
+            value, _ = decoder.raw_decode(text[match.start():])
+            return value
+        except json.JSONDecodeError as exc:
+            last_error = exc
+    if last_error:
+        raise last_error
+    raise ValueError(f"No JSON in model output: {text[:200]}")
+
+
+def ask_claude_json(system: str, prompt: str, max_tokens: int = 4000):
+    raw = ask_claude(system, prompt, max_tokens)
+    try:
+        return parse_json(raw)
+    except (ValueError, json.JSONDecodeError) as first_error:
+        repair_system = (
+            "You repair malformed JSON. Return only the corrected JSON, with the same "
+            "meaning and structure as the candidate. Escape quotes and control characters "
+            "inside strings. Do not use markdown fences or add commentary."
+        )
+        repair_prompt = (
+            f"The candidate JSON is invalid: {first_error}\n\n"
+            "Correct this candidate and return one complete valid JSON value:\n"
+            f"{raw}"
+        )
+        return parse_json(ask_claude(repair_system, repair_prompt, max(max_tokens, 5000)))
+
+
+def ask_claude_structured(
+    system: str, prompt: str, tool_name: str, schema: dict, max_tokens: int = 4000
+) -> dict:
+    resp = requests.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={
+            "x-api-key": os.environ["ANTHROPIC_API_KEY"],
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+        json={
+            "model": MODEL,
+            "max_tokens": max_tokens,
+            "system": system,
+            "tools": [{"name": tool_name, "input_schema": schema}],
+            "tool_choice": {"type": "tool", "name": tool_name},
+            "messages": [{"role": "user", "content": prompt}],
+        },
+        timeout=180,
+    )
+    resp.raise_for_status()
+    for block in resp.json().get("content", []):
+        if block.get("type") == "tool_use" and block.get("name") == tool_name:
+            return block["input"]
+    raise ValueError(f"Claude did not return structured data for {tool_name}")
+
+
+BRIEF_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "headline": {"type": "string"},
+        "sections": {"type": "array", "items": {"type": "object"}},
+        "voice_script": {"type": "string"},
+    },
+    "required": ["headline", "sections", "voice_script"],
+}
+
+ALERT_SCHEMA = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "id": {"type": "string"},
+            "score": {"type": "integer"},
+            "alert": {"type": "string"},
+        },
+        "required": ["id", "score", "alert"],
+    },
+}
 
 
 BRIEF_SYSTEM = """You are a sharp news editor writing a personal morning brief for a data scientist
@@ -286,15 +362,14 @@ def run_daily(dry: bool) -> None:
     articles = "\n".join(
         f"[{i['section']}] {i['title']} ({i['source']}) {i['link']}\n  {i['summary']}" for i in items
     )
-    raw = ask_claude(BRIEF_SYSTEM, BRIEF_PROMPT.format(
-        today=today, language=cfg["language"], max_items=cfg["max_items_per_section"], articles=articles,
-    ))
     try:
-        brief = parse_json(raw)
-        if not isinstance(brief, dict) or "headline" not in brief or "sections" not in brief:
-            raise ValueError("Brief JSON is missing required keys")
-    except (ValueError, json.JSONDecodeError) as exc:
+        brief = ask_claude_structured(BRIEF_SYSTEM, BRIEF_PROMPT.format(
+            today=today, language=cfg["language"], max_items=cfg["max_items_per_section"], articles=articles,
+        ), "morning_brief", BRIEF_SCHEMA)
+    except (ValueError, requests.RequestException) as exc:
         print(f"[warn] brief generation fallback: {exc}", file=sys.stderr)
+        brief = None
+    if not isinstance(brief, dict) or "headline" not in brief or "sections" not in brief:
         lines = [
             f"<b>☀️ Morning Brief · {html.escape(today)}</b>",
             "<i>Automated summary unavailable right now. Here are the latest items from your feeds.</i>",
@@ -334,12 +409,12 @@ def run_alerts(dry: bool) -> None:
     recent = "\n".join(f"- {v['title']}" for v in seen["alerted"].values()) or "(none)"
     listing = "\n".join(f"id={i['id']} | {i['title']} ({i['source']})\n  {i['summary']}" for i in candidates[:40])
     try:
-        scores = parse_json(ask_claude(ALERT_SYSTEM, ALERT_PROMPT.format(
+        scores = ask_claude_structured(ALERT_SYSTEM, ALERT_PROMPT.format(
             recent=recent, language=CONFIG["brief"]["language"], items=listing,
-        ), max_tokens=2000))
+        ), "alert_scores", ALERT_SCHEMA, max_tokens=2000)
         if not isinstance(scores, list):
             raise ValueError("Alert JSON is not a list")
-    except (ValueError, json.JSONDecodeError) as exc:
+    except (ValueError, json.JSONDecodeError, requests.RequestException) as exc:
         print(f"[warn] alert scoring skipped: {exc}", file=sys.stderr)
         save_seen(seen)
         return
