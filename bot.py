@@ -45,6 +45,42 @@ Commands:
 
 Your daily brief and urgent alerts keep running on their own."""
 
+PLAN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "action": {"type": "string", "enum": ["news", "brief", "answer"]},
+        "queries": {"type": "array", "items": {"type": "object"}},
+        "days": {"type": "integer"},
+        "max_items": {"type": "integer"},
+        "reply_language": {"type": "string", "enum": ["French", "English"]},
+        "voice": {"type": "boolean"},
+        "topic": {"type": "string"},
+        "text": {"type": "string"},
+    },
+    "required": ["action"],
+}
+
+SUMMARY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "takeaway": {"type": "string"},
+        "items": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "why": {"type": "string"},
+                    "link": {"type": "string"},
+                },
+                "required": ["title", "why", "link"],
+            },
+        },
+        "voice_script": {"type": "string"},
+    },
+    "required": ["takeaway", "items", "voice_script"],
+}
+
 
 PLANNER_SYSTEM = """You turn a Telegram message into a news search plan. Today is {today}.
 Return ONLY JSON, one of:
@@ -129,12 +165,14 @@ def answer_news(request: str, plan: dict) -> None:
     voice_rule = ('"a spoken version, 200 to 350 words, radio style, no URLs or symbols"'
                   if plan.get("voice") else '""')
     max_items = max(3, min(int(plan.get("max_items", 8)), 15))
-    out = brief.parse_json(brief.ask_claude(
+    out = brief.ask_claude_structured(
         SUMMARY_SYSTEM.format(language=language),
         SUMMARY_PROMPT.format(request=request, topic=plan.get("topic", ""), max_items=max_items,
                               voice_rule=voice_rule, articles=articles),
+        "news_summary",
+        SUMMARY_SCHEMA,
         max_tokens=3000,
-    ))
+    )
 
     e = html.escape
     lines = [f"<b>📰 {e(plan.get('topic', 'News'))}</b>", f"<i>{e(out.get('takeaway', ''))}</i>"]
@@ -170,7 +208,9 @@ def handle(message: dict) -> None:
 
     typing()
     today = datetime.now().strftime("%A, %B %d, %Y")
-    plan = brief.parse_json(brief.ask_claude(PLANNER_SYSTEM.format(today=today), text, max_tokens=600))
+    plan = brief.ask_claude_structured(
+        PLANNER_SYSTEM.format(today=today), text, "news_plan", PLAN_SCHEMA, max_tokens=600
+    )
     action = plan.get("action")
     if action == "brief":
         reply("☀️ Building your brief, about a minute...")

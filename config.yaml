@@ -2,8 +2,8 @@
 # Edit freely. Feeds that fail to load are skipped and logged, so one dead URL never breaks the run.
 
 brief:
-  language: English          # "English" or "French" (also switch the voice below)
-  voice: en-US-AndrewNeural  # French option: fr-FR-HenriNeural
+  language: "English"          # "English" or "French" (also switch the voice below)
+  voice: "en-US-AndrewNeural"  # French option: fr-FR-HenriNeural
   max_items_per_section: 6
   lookback_hours: 26         # a bit over 24h so nothing falls between runs
 
@@ -13,36 +13,36 @@ alerts:
 
 feeds:
   ai:
-    - https://huggingface.co/blog/feed.xml
-    - https://openai.com/news/rss.xml
-    - https://deepmind.google/blog/rss.xml
-    - https://importai.substack.com/feed
-    - https://techcrunch.com/category/artificial-intelligence/feed/
-    - https://www.theverge.com/rss/ai-artificial-intelligence/index.xml
-    - https://www.semianalysis.com/feed
-    - https://export.arxiv.org/rss/cs.AI
+    - "https://huggingface.co/blog/feed.xml"
+    - "https://openai.com/news/rss.xml"
+    - "https://deepmind.google/blog/rss.xml"
+    - "https://importai.substack.com/feed"
+    - "https://techcrunch.com/category/artificial-intelligence/feed/"
+    - "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"
+    - "https://www.semianalysis.com/feed"
+    - "https://export.arxiv.org/rss/cs.AI"
   energy:
-    - https://www.utilitydive.com/feeds/news/
-    - https://www.eia.gov/rss/todayinenergy.xml
-    - https://www.energy-storage.news/feed/
-    - https://www.datacenterdynamics.com/en/rss/
+    - "https://www.utilitydive.com/feeds/news/"
+    - "https://www.eia.gov/rss/todayinenergy.xml"
+    - "https://www.energy-storage.news/feed/"
+    - "https://www.datacenterdynamics.com/en/rss/"
   africa:
     # Google News search feeds: change the words after q= to follow any country or topic
-    - https://news.google.com/rss/search?q=%22C%C3%B4te+d%27Ivoire%22+when:1d&hl=fr&gl=CI&ceid=CI:fr
-    - https://news.google.com/rss/search?q=%C3%A9nergie+OR+%C3%A9lectricit%C3%A9+%22Afrique+de+l%27Ouest%22+when:1d&hl=fr&gl=CI&ceid=CI:fr
-    - https://news.google.com/rss/search?q=Africa+%28AI+OR+%22data+center%22+OR+energy+OR+startup%29+when:1d&hl=en-US&gl=US&ceid=US:en
-    - https://www.rfi.fr/fr/afrique/rss
-    - https://www.jeuneafrique.com/feed/
-    - https://www.esi-africa.com/feed/
+    - "https://news.google.com/rss/search?q=%22C%C3%B4te+d%27Ivoire%22+when:1d&hl=fr&gl=CI&ceid=CI:fr"
+    - "https://news.google.com/rss/search?q=%C3%A9nergie+OR+%C3%A9lectricit%C3%A9+%22Afrique+de+l%27Ouest%22+when:1d&hl=fr&gl=CI&ceid=CI:fr"
+    - "https://news.google.com/rss/search?q=Africa+%28AI+OR+%22data+center%22+OR+energy+OR+startup%29+when:1d&hl=en-US&gl=US&ceid=US:en"
+    - "https://www.rfi.fr/fr/afrique/rss"
+    - "https://www.jeuneafrique.com/feed/"
+    - "https://www.esi-africa.com/feed/"
   security:
-    - https://feeds.feedburner.com/TheHackersNews
-    - https://www.bleepingcomputer.com/feed/
-    - https://www.cisa.gov/cybersecurity-advisories/all.xml
-    - https://www.coindesk.com/arc/outboundfeeds/rss/
-    - https://www.theblock.co/rss.xml
+    - "https://feeds.feedburner.com/TheHackersNews"
+    - "https://www.bleepingcomputer.com/feed/"
+    - "https://www.cisa.gov/cybersecurity-advisories/all.xml"
+    - "https://www.coindesk.com/arc/outboundfeeds/rss/"
+    - "https://www.theblock.co/rss.xml"
 
 # CISA's list of vulnerabilities confirmed to be exploited in the wild (structured JSON, very reliable)
-cisa_kev_url: https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json
+cisa_kev_url: "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 
 # Cheap prefilter before the model sees anything. Only items matching one of these
 # words are scored for urgency, which keeps alert runs to a few cents per month.
