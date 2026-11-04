@@ -289,7 +289,23 @@ def run_daily(dry: bool) -> None:
     raw = ask_claude(BRIEF_SYSTEM, BRIEF_PROMPT.format(
         today=today, language=cfg["language"], max_items=cfg["max_items_per_section"], articles=articles,
     ))
-    brief = parse_json(raw)
+    try:
+        brief = parse_json(raw)
+        if not isinstance(brief, dict) or "headline" not in brief or "sections" not in brief:
+            raise ValueError("Brief JSON is missing required keys")
+    except (ValueError, json.JSONDecodeError) as exc:
+        print(f"[warn] brief generation fallback: {exc}", file=sys.stderr)
+        lines = [
+            f"<b>☀️ Morning Brief · {html.escape(today)}</b>",
+            "<i>Automated summary unavailable right now. Here are the latest items from your feeds.</i>",
+        ]
+        for i in items[: min(len(items), 12)]:
+            lines.append(
+                f"• <a href=\"{html.escape(i['link'], quote=True)}\">{html.escape(i['title'])}</a>"
+                f" ({html.escape(i['source'])})"
+            )
+        send_text("\n\n".join(lines), dry)
+        return
 
     send_text(render_brief(brief, today), dry)
     if dry:
@@ -317,9 +333,16 @@ def run_alerts(dry: bool) -> None:
 
     recent = "\n".join(f"- {v['title']}" for v in seen["alerted"].values()) or "(none)"
     listing = "\n".join(f"id={i['id']} | {i['title']} ({i['source']})\n  {i['summary']}" for i in candidates[:40])
-    scores = parse_json(ask_claude(ALERT_SYSTEM, ALERT_PROMPT.format(
-        recent=recent, language=CONFIG["brief"]["language"], items=listing,
-    ), max_tokens=2000))
+    try:
+        scores = parse_json(ask_claude(ALERT_SYSTEM, ALERT_PROMPT.format(
+            recent=recent, language=CONFIG["brief"]["language"], items=listing,
+        ), max_tokens=2000))
+        if not isinstance(scores, list):
+            raise ValueError("Alert JSON is not a list")
+    except (ValueError, json.JSONDecodeError) as exc:
+        print(f"[warn] alert scoring skipped: {exc}", file=sys.stderr)
+        save_seen(seen)
+        return
 
     by_id = {i["id"]: i for i in candidates}
     for s in scores:
